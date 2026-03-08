@@ -21,9 +21,13 @@ body {
 
 .logo {
   margin-bottom: 30px;
-  color: #b91c1c;
-  font-size: 28px;
-  font-weight: bold;
+  display: flex;
+  justify-content: center;
+}
+
+.logo img {
+  width: 140px;
+  height: auto;
 }
 
 .nav-btn {
@@ -724,4 +728,26 @@ body {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+.mic-btn {
+  padding: 12px 14px;
+  background: #2a2a2a;
+  color: white;
+  border: 1px solid #3a3a3a;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: background-color 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
+}
+
+.mic-btn:hover {
+  background: #3a3a3a;
+  border-color: #b91c1c;
+  transform: translateY(-1px);
+}
+
+.mic-btn.recording {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: white;
 }
