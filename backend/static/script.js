@@ -1,4 +1,3 @@
-
 function showSection(sectionId) {
   document.querySelectorAll(".section").forEach(sec => sec.classList.remove("active"));
   const target = document.getElementById(sectionId);
@@ -18,9 +17,7 @@ async function callAPI(text) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text })
     });
-    const data = await res.json();
-    console.log("[FRONTEND] Received:", data);
-    return data;
+    return await res.json();
   } catch (err) {
     console.error("[FRONTEND] API error:", err);
     return null;
@@ -114,7 +111,6 @@ async function addItem(type) {
   }
 
   const res = await callAPI(apiText);
-  
   if (!res || res.status === "error" || !res.data) {
     console.error("[FRONTEND] Backend could not process request:", res?.message);
     return; 
@@ -177,50 +173,35 @@ async function sendMessage() {
   messages.scrollTop = messages.scrollHeight;
 }
 
-async function startVoiceInput(targetInputId) {
+async function startVoiceInput(targetInputId, event) {
   const targetInput = document.getElementById(targetInputId);
   if (!targetInput) return;
 
+  const activeMicButton = event?.currentTarget;
+  if (activeMicButton) activeMicButton.classList.add("recording"); 
+
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioChunks = [];
-    const mediaRecorder = new MediaRecorder(stream);
+    const res = await fetch("/voice/listen", { method: "POST" });
+    const data = await res.json();
 
-    const activeMicButton = event.target;
-    if (activeMicButton) activeMicButton.classList.add("recording");
+    if (data.status === "success" && data.text?.trim()) {
+      targetInput.value = data.text.trim();
+      targetInput.focus();
 
-    mediaRecorder.start();
-    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-
-    mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-      const formData = new FormData();
-      formData.append("file", audioBlob, "voice.webm");
-
-      try {
-        const response = await fetch("/voice", { method: "POST", body: formData });
-        const data = await response.json();
-        if (data.text) {
-          targetInput.value = data.text;
-          targetInput.focus();
-        }
-      } catch (error) {
-        console.error("Voice upload error:", error);
+      if (targetInputId === "user-input") {
+        await sendMessage();
+      } else if (targetInputId === "taskInput") {
+        await addItem("task");
+      } else if (targetInputId === "expenseTitleInput") {
+        await addItem("spending");
       }
-
-      if (activeMicButton) activeMicButton.classList.remove("recording");
-      stream.getTracks().forEach(track => track.stop());
-    };
-
-    setTimeout(() => {
-      if (mediaRecorder.state === "recording") mediaRecorder.stop();
-    }, 5000);
-
-  } catch (error) {
-    console.error("Microphone access error:", error);
+    }
+  } catch (err) {
+    console.error("Voice input error:", err);
+  } finally {
+    if (activeMicButton) activeMicButton.classList.remove("recording");
   }
 }
-
 
 document.addEventListener("DOMContentLoaded", () => {
   window.tasks = [];
