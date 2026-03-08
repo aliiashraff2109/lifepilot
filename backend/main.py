@@ -4,8 +4,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
 
+from pydantic import BaseModel
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
@@ -14,7 +14,7 @@ from tasks.task_manager import TaskManager
 from finance.finance_manager import FinanceManager
 from audio.speech_recognizer import SpeechRecognizer
 
-
+speech_recognizer = SpeechRecognizer()
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
@@ -107,6 +107,13 @@ async def delete_task_direct(task_id: int):
 async def delete_spending_direct(trans_id: int):
     res = pilot_instance.finance_manager.delete_transaction(trans_id)
     return JSONResponse(res)
+
+@app.post("/voice/listen")
+async def voice_listen():
+    text = speech_recognizer.listen()
+    if text:
+        return JSONResponse({"status": "success", "text": text})
+    return JSONResponse({"status": "error", "text": ""})
 
 def pretty_print(response: dict): # Debugging 
     if response.get("status") != "success":
