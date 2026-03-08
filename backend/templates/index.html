@@ -11,7 +11,10 @@
   <div class="container">
 
     <aside class="sidebar">
-      <h2 class="logo">LifePilot</h2>
+      <div class="logo">
+        <img src="/static/lifepilot-logo.png" alt="LifePilot Logo">
+      </div>
+
       <nav>
         <button class="nav-btn" onclick="showSection('dashboard')">Dashboard</button>
         <button class="nav-btn" onclick="showSection('tasks')">Tasks</button>
@@ -24,22 +27,25 @@
 
     <main class="main-content">
 
-      <!-- DASHBOARD -->
       <section id="dashboard" class="section active">
         <h1>Dashboard</h1>
+
         <div class="cards">
           <div class="card">
             <h3>Total Tasks</h3>
             <p id="totalTasksCard">0</p>
           </div>
+
           <div class="card">
             <h3>Completed Tasks</h3>
             <p id="completedTasksCard">0</p>
           </div>
+
           <div class="card">
             <h3>Pending Reminders</h3>
             <p id="remindersCard">0</p>
           </div>
+
           <div class="card">
             <h3>Total Spending</h3>
             <p id="dashboardSpending">$0.00</p>
@@ -52,21 +58,25 @@
             <div class="tile-title">Tasks</div>
             <div class="tile-desc">Add, view, complete tasks</div>
           </button>
+
           <button class="feature-tile" onclick="showSection('reminders')">
             <div class="tile-icon">🔔</div>
             <div class="tile-title">Reminders</div>
             <div class="tile-desc">Never miss deadlines</div>
           </button>
+
           <button class="feature-tile" onclick="showSection('schedule')">
             <div class="tile-icon">📅</div>
             <div class="tile-title">Schedule</div>
             <div class="tile-desc">Plan your week</div>
           </button>
+
           <button class="feature-tile" onclick="showSection('spending')">
             <div class="tile-icon">💰</div>
             <div class="tile-title">Spending</div>
             <div class="tile-desc">Track your money</div>
           </button>
+
           <button class="feature-tile" onclick="showSection('chat')">
             <div class="tile-icon">🤖</div>
             <div class="tile-title">AI Assistant</div>
@@ -75,38 +85,37 @@
         </div>
       </section>
 
-      <!-- TASKS -->
       <section id="tasks" class="section">
         <h1>Your Tasks</h1>
         <div class="task-input-box">
           <input type="text" id="taskInput" placeholder="Enter a new task..." />
-          <button id="taskAddBtn">Add Task</button>
+          <button type="button" class="mic-btn" onclick="startVoiceInput('taskInput')">🎤</button>
+          <button id="taskAddBtn" onclick="addTask()">Add Task</button>
         </div>
         <div id="taskList" class="task-list"></div>
       </section>
 
-      <!-- REMINDERS -->
       <section id="reminders" class="section">
         <h1>Reminders</h1>
         <div class="reminder-input-box">
           <input type="text" id="reminderInput" placeholder="Enter a new reminder..." />
-          <button onclick="addReminder('reminder')">Add Reminder</button>
+          <button type="button" class="mic-btn" onclick="startVoiceInput('reminderInput')">🎤</button>
+          <button id="reminderAddBtn" onclick="addReminder()">Add Reminder</button>
         </div>
         <div id="reminderList" class="reminder-list"></div>
       </section>
 
-      <!-- SCHEDULE -->
       <section id="schedule" class="section">
         <h1>Schedule</h1>
         <div class="schedule-input-box">
           <input type="text" id="scheduleTitleInput" placeholder="Enter schedule title..." />
+          <button type="button" class="mic-btn" onclick="startVoiceInput('scheduleTitleInput')">🎤</button>
           <input type="time" id="scheduleTimeInput" />
-          <button onclick="addScheduleItem('schedule')">Add Event</button>
+          <button id="scheduleAddBtn" onclick="addScheduleItem()">Add Event</button>
         </div>
         <div id="scheduleList" class="schedule-list"></div>
       </section>
 
-      <!-- SPENDING -->
       <section id="spending" class="section">
         <h1>Spending</h1>
         <div class="spending-summary-card">
@@ -114,14 +123,14 @@
           <p id="totalSpending">$0.00</p>
         </div>
         <div class="spending-input-box">
-          <input type="text" id="expenseTitleInput" placeholder="Enter expense title..." />
-          <input type="number" id="expenseAmountInput" placeholder="Amount" min="0" step="0.01" />
-          <button id="spendingAddBtn">Add Expense</button>
+          <input type="text" id="expenseTitleInput" placeholder="Example: Coffee 5" />
+          <button type="button" class="mic-btn" onclick="startVoiceInput('expenseTitleInput')">🎤</button>
+          <input type="number" id="expenseAmountInput" style="display:none;" />
+          <button id="spendingAddBtn" onclick="addExpense()">Add Expense</button>
         </div>
         <div id="spendingList" class="spending-list"></div>
       </section>
 
-      <!-- CHAT -->
       <section id="chat" class="section">
         <h1>AI Assistant</h1>
         <div class="chat-box" id="messages">
@@ -129,6 +138,7 @@
         </div>
         <div class="chat-input">
           <input type="text" id="user-input" placeholder="Type your message..." />
+          <button type="button" class="mic-btn" onclick="startVoiceInput('user-input')">🎤</button>
           <button onclick="sendMessage()">Send</button>
         </div>
       </section>
