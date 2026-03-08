@@ -10,7 +10,6 @@ function showSection(sectionId) {
   });
 }
 
-
 async function callAPI(text) {
   console.log("[FRONTEND] Sending:", text);
   try {
@@ -28,6 +27,31 @@ async function callAPI(text) {
   }
 }
 
+async function syncData() {
+  try {
+    const res = await fetch("/api/init");
+    const data = await res.json();
+    
+    window.tasks = data.tasks.map(t => ({
+      id: t.id,
+      title: t.title,
+      time: t.due_date || "",
+      completed: t.completed
+    }));
+    
+    window.spending = data.spending.map(s => ({
+      id: s.id,
+      title: s.category || s.description || "Expense",
+      amount: s.amount
+    }));
+
+    renderList(window.tasks, "taskList", "task");
+    renderList(window.spending, "spendingList", "spending");
+
+  } catch (err) {
+    console.error("Could not load database:", err);
+  }
+}
 
 function renderList(listArray, containerId, type) {
   const container = document.getElementById(containerId);
@@ -55,7 +79,6 @@ function renderList(listArray, containerId, type) {
   updateDashboardCards();
 }
 
-
 function updateDashboardCards() {
   const totalTasks = window.tasks?.length || 0;
   const completedTasks = window.tasks?.filter(t => t.completed).length || 0;
@@ -66,7 +89,6 @@ function updateDashboardCards() {
   if (document.getElementById("dashboardSpending")) document.getElementById("dashboardSpending").textContent = `$${totalSpending.toFixed(2)}`;
   if (document.getElementById("totalSpending")) document.getElementById("totalSpending").textContent = `$${totalSpending.toFixed(2)}`;
 }
-
 
 async function addItem(type) {
   let inputId, amountId;
@@ -140,9 +162,6 @@ async function deleteItem(type, id) {
   await syncData();
 }
 
-
-   // CHAT
-
 async function sendMessage() {
   const input = document.getElementById("user-input");
   const messages = document.getElementById("messages");
@@ -158,32 +177,50 @@ async function sendMessage() {
   messages.scrollTop = messages.scrollHeight;
 }
 
+async function startVoiceInput(targetInputId) {
+  const targetInput = document.getElementById(targetInputId);
+  if (!targetInput) return;
 
-async function syncData() {
   try {
-    const res = await fetch("/api/init");
-    const data = await res.json();
-    
-    window.tasks = data.tasks.map(t => ({
-      id: t.id,
-      title: t.title,
-      time: t.due_date || "",
-      completed: t.completed
-    }));
-    
-    window.spending = data.spending.map(s => ({
-      id: s.id,
-      title: s.category || s.description || "Expense",
-      amount: s.amount
-    }));
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioChunks = [];
+    const mediaRecorder = new MediaRecorder(stream);
 
-    renderList(window.tasks, "taskList", "task");
-    renderList(window.spending, "spendingList", "spending");
+    const activeMicButton = event.target;
+    if (activeMicButton) activeMicButton.classList.add("recording");
 
-  } catch (err) {
-    console.error("Could not load database:", err);
+    mediaRecorder.start();
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+      const formData = new FormData();
+      formData.append("file", audioBlob, "voice.webm");
+
+      try {
+        const response = await fetch("/voice", { method: "POST", body: formData });
+        const data = await response.json();
+        if (data.text) {
+          targetInput.value = data.text;
+          targetInput.focus();
+        }
+      } catch (error) {
+        console.error("Voice upload error:", error);
+      }
+
+      if (activeMicButton) activeMicButton.classList.remove("recording");
+      stream.getTracks().forEach(track => track.stop());
+    };
+
+    setTimeout(() => {
+      if (mediaRecorder.state === "recording") mediaRecorder.stop();
+    }, 5000);
+
+  } catch (error) {
+    console.error("Microphone access error:", error);
   }
 }
+
 
 document.addEventListener("DOMContentLoaded", () => {
   window.tasks = [];
@@ -199,6 +236,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el) el.addEventListener("keydown", e => { if (e.key === "Enter") addItem(type); });
     if (btn) btn.addEventListener("click", () => addItem(type));
   });
+
+  const chatInput = document.getElementById("user-input");
+  if (chatInput) chatInput.addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(); });
 
   const firstBtn = document.querySelector(".nav-btn");
   if (firstBtn) firstBtn.classList.add("active");
