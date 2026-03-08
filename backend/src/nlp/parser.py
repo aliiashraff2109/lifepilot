@@ -8,7 +8,7 @@ import string
 
 class NLPParser:
     def __init__(self):
-        self.api_key = "AIzaSyCjbk-dLCjeuKIVDnG6bm3-sR2me8sGz7M"
+        self.api_key = "AIzaSyCyx5_hYAE093hY0UmDq_0jjSsm88iVKr4"
         self.client = genai.Client(api_key=self.api_key)
 
     def clean_task_title(self, title: str) -> str:
@@ -35,7 +35,7 @@ class NLPParser:
         return title.title()
 
     def parse(self, text: str, existing_task_titles: list = []) -> dict:
-        prompt = f"""
+        prompt = f""""
 You are LifePilot, an AI assistant for students.
 Convert the input into STRICT JSON.
 
@@ -126,12 +126,13 @@ Return ONLY valid JSON. No markdown. No explanation.
 
         except Exception as e:
             lower = text.lower()
+            # Quick NLP fallbacks
             if "list" in lower and "task" in lower:
                 return {"intent": "list_tasks", "data": {}}
             if "complete" in lower and "task" in lower:
-                # Use cleaned fuzzy matching fallback
                 return {"intent": "complete_task", "data": {"title": text}}
 
+            # Finance fallbacks
             amount = 0
             category = ""
             date_parsed = datetime.now().replace(hour=18, minute=0, second=0).strftime("%Y-%m-%d %H:%M:%S")
@@ -169,5 +170,3 @@ Return ONLY valid JSON. No markdown. No explanation.
                 return {"intent": "get_transactions", "data": {}}
             if "summary" in lower:
                 return {"intent": "get_summary", "data": {}}
-
-            return {"intent": "unknown", "data": {}}
