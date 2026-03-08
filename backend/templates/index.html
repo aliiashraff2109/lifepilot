@@ -89,7 +89,7 @@
         <h1>Your Tasks</h1>
         <div class="task-input-box">
           <input type="text" id="taskInput" placeholder="Enter a new task..." />
-          <button type="button" class="mic-btn" onclick="startVoiceInput('taskInput')">🎤</button>
+          <button type="button" class="mic-btn" onclick="startVoiceInput('taskInput', event)">🎤</button>
           <button id="taskAddBtn" onclick="addTask()">Add Task</button>
         </div>
         <div id="taskList" class="task-list"></div>
@@ -99,7 +99,7 @@
         <h1>Reminders</h1>
         <div class="reminder-input-box">
           <input type="text" id="reminderInput" placeholder="Enter a new reminder..." />
-          <button type="button" class="mic-btn" onclick="startVoiceInput('reminderInput')">🎤</button>
+          <button type="button" class="mic-btn" onclick="startVoiceInput('reminderInput', event)">🎤</button>
           <button id="reminderAddBtn" onclick="addReminder()">Add Reminder</button>
         </div>
         <div id="reminderList" class="reminder-list"></div>
@@ -109,7 +109,7 @@
         <h1>Schedule</h1>
         <div class="schedule-input-box">
           <input type="text" id="scheduleTitleInput" placeholder="Enter schedule title..." />
-          <button type="button" class="mic-btn" onclick="startVoiceInput('scheduleTitleInput')">🎤</button>
+          <button type="button" class="mic-btn" onclick="startVoiceInput('scheduleTitleInput', event)">🎤</button>
           <input type="time" id="scheduleTimeInput" />
           <button id="scheduleAddBtn" onclick="addScheduleItem()">Add Event</button>
         </div>
@@ -124,7 +124,7 @@
         </div>
         <div class="spending-input-box">
           <input type="text" id="expenseTitleInput" placeholder="Example: Coffee 5" />
-          <button type="button" class="mic-btn" onclick="startVoiceInput('expenseTitleInput')">🎤</button>
+          <button type="button" class="mic-btn" onclick="startVoiceInput('expenseTitleInput', event)">🎤</button>
           <input type="number" id="expenseAmountInput" style="display:none;" />
           <button id="spendingAddBtn" onclick="addExpense()">Add Expense</button>
         </div>
@@ -138,7 +138,7 @@
         </div>
         <div class="chat-input">
           <input type="text" id="user-input" placeholder="Type your message..." />
-          <button type="button" class="mic-btn" onclick="startVoiceInput('user-input')">🎤</button>
+          <button type="button" class="mic-btn" onclick="startVoiceInput('user-input', event)">🎤</button>
           <button onclick="sendMessage()">Send</button>
         </div>
       </section>
