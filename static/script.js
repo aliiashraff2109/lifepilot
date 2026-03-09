@@ -1,503 +1,232 @@
 function showSection(sectionId) {
-  const sections = document.querySelectorAll(".section");
-  sections.forEach(section => section.classList.remove("active"));
+  document.querySelectorAll(".section").forEach(sec => sec.classList.remove("active"));
+  const target = document.getElementById(sectionId);
+  if (target) target.classList.add("active");
 
-  const targetSection = document.getElementById(sectionId);
-  if (targetSection) {
-    targetSection.classList.add("active");
-  }
-
-  const buttons = document.querySelectorAll(".nav-btn");
-  buttons.forEach(btn => btn.classList.remove("active"));
-
-  buttons.forEach(btn => {
-    if (btn.getAttribute("onclick")?.includes(`'${sectionId}'`)) {
-      btn.classList.add("active");
-    }
+  document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.remove("active"));
+  document.querySelectorAll(".nav-btn").forEach(btn => {
+    if (btn.getAttribute("onclick")?.includes(`'${sectionId}'`)) btn.classList.add("active");
   });
 }
 
-/* =========================
-   TASKS
-========================= */
+async function callAPI(text) {
+  console.log("[FRONTEND] Sending:", text);
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text })
+    });
+    return await res.json();
+  } catch (err) {
+    console.error("[FRONTEND] API error:", err);
+    return null;
+  }
+}
 
-let demoTasks = [];
+async function syncData() {
+  try {
+    const res = await fetch("/api/init");
+    const data = await res.json();
+    
+    window.tasks = data.tasks.map(t => ({
+      id: t.id,
+      title: t.title,
+      time: t.due_date || "",
+      completed: t.completed
+    }));
+    
+    window.spending = data.spending.map(s => ({
+      id: s.id,
+      title: s.category || s.description || "Expense",
+      amount: s.amount
+    }));
 
-function renderTasks(tasks) {
-  const taskList = document.getElementById("taskList");
-  if (!taskList) return;
+    renderList(window.tasks, "taskList", "task");
+    renderList(window.spending, "spendingList", "spending");
 
-  taskList.innerHTML = "";
+  } catch (err) {
+    console.error("Could not load database:", err);
+  }
+}
 
-  tasks.forEach(task => {
-    const taskCard = document.createElement("div");
-    taskCard.className = "task-card";
+function renderList(listArray, containerId, type) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = "";
 
-    taskCard.innerHTML = `
-      <div class="task-info">
-        <h3 class="${task.completed ? "completed-task" : ""}">${task.title}</h3>
-        <p>Status: ${task.completed ? "Completed" : "Pending"}</p>
+  listArray.forEach(item => {
+    const div = document.createElement("div");
+    div.className = `${type}-card`;
+    div.innerHTML = `
+      <div class="${type}-info">
+        <h3 class="${item.completed ? 'completed-task' : ''}">${item.title}</h3>
+        ${item.amount !== undefined ? `<p>Amount: $${Number(item.amount).toFixed(2)}</p>` : ""}
+        ${item.time ? `<p>Time: ${item.time}</p>` : ""}
+        <p>Status: ${item.completed ? 'Completed' : 'Pending'}</p>
       </div>
-      <div class="task-actions">
-        ${
-          task.completed
-            ? `<span class="done-badge">Done</span>`
-            : `<button onclick="completeTask(${task.id})">Complete</button>`
-        }
-        <button class="delete-btn" onclick="deleteTask(${task.id})">Delete</button>
+      <div class="${type}-actions">
+        ${item.completed ? '<span class="done-badge">Done</span>' : `<button onclick="completeItem('${type}', ${item.id})">Complete</button>`}
+        <button class="delete-btn" onclick="deleteItem('${type}', ${item.id})">Delete</button>
       </div>
     `;
-
-    taskList.appendChild(taskCard);
+    container.appendChild(div);
   });
 
   updateDashboardCards();
-}
-
-function addTask() {
-  const taskInput = document.getElementById("taskInput");
-  if (!taskInput) return;
-
-  const text = taskInput.value.trim();
-  if (text === "") return;
-
-  const newTask = {
-    id: Date.now(),
-    title: text,
-    completed: false
-  };
-
-  demoTasks.push(newTask);
-  renderTasks(demoTasks);
-  taskInput.value = "";
-  taskInput.focus();
-}
-
-function completeTask(taskId) {
-  demoTasks = demoTasks.map(task => {
-    if (task.id === taskId) {
-      return { ...task, completed: true };
-    }
-    return task;
-  });
-
-  renderTasks(demoTasks);
-}
-
-function deleteTask(taskId) {
-  demoTasks = demoTasks.filter(task => task.id !== taskId);
-  renderTasks(demoTasks);
 }
 
 function updateDashboardCards() {
-  const totalTasks = demoTasks.length;
-  const completedTasks = demoTasks.filter(task => task.completed).length;
-  const pendingReminders = reminders.filter(reminder => !reminder.completed).length;
-  const totalSpending = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const totalTasks = window.tasks?.length || 0;
+  const completedTasks = window.tasks?.filter(t => t.completed).length || 0;
+  const totalSpending = window.spending?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
 
-  const totalTasksCard = document.getElementById("totalTasksCard");
-  const completedTasksCard = document.getElementById("completedTasksCard");
-  const remindersCard = document.getElementById("remindersCard");
-  const dashboardSpending = document.getElementById("dashboardSpending");
-
-  if (totalTasksCard) totalTasksCard.textContent = totalTasks;
-  if (completedTasksCard) completedTasksCard.textContent = completedTasks;
-  if (remindersCard) remindersCard.textContent = pendingReminders;
-  if (dashboardSpending) dashboardSpending.textContent = `$${totalSpending.toFixed(2)}`;
+  if (document.getElementById("totalTasksCard")) document.getElementById("totalTasksCard").textContent = totalTasks;
+  if (document.getElementById("completedTasksCard")) document.getElementById("completedTasksCard").textContent = completedTasks;
+  if (document.getElementById("dashboardSpending")) document.getElementById("dashboardSpending").textContent = `$${totalSpending.toFixed(2)}`;
+  if (document.getElementById("totalSpending")) document.getElementById("totalSpending").textContent = `$${totalSpending.toFixed(2)}`;
 }
 
-/* =========================
-   REMINDERS
-========================= */
-
-let reminders = [];
-
-function renderReminders(reminderArray) {
-  const reminderList = document.getElementById("reminderList");
-  if (!reminderList) return;
-
-  reminderList.innerHTML = "";
-
-  reminderArray.forEach(reminder => {
-    const reminderCard = document.createElement("div");
-    reminderCard.className = "reminder-card";
-
-    reminderCard.innerHTML = `
-      <div class="reminder-info">
-        <h3 class="${reminder.completed ? "completed-task" : ""}">${reminder.title}</h3>
-        <p>Status: ${reminder.completed ? "Completed" : "Pending"}</p>
-      </div>
-      <div class="reminder-actions">
-        ${
-          reminder.completed
-            ? `<span class="done-badge">Done</span>`
-            : `<button onclick="completeReminder(${reminder.id})">Complete</button>`
-        }
-        <button class="delete-btn" onclick="deleteReminder(${reminder.id})">Delete</button>
-      </div>
-    `;
-
-    reminderList.appendChild(reminderCard);
-  });
-
-  updateDashboardCards();
-}
-
-function addReminder() {
-  const reminderInput = document.getElementById("reminderInput");
-  if (!reminderInput) return;
-
-  const text = reminderInput.value.trim();
-  if (text === "") return;
-
-  const newReminder = {
-    id: Date.now(),
-    title: text,
-    completed: false
-  };
-
-  reminders.push(newReminder);
-  renderReminders(reminders);
-  reminderInput.value = "";
-  reminderInput.focus();
-}
-
-function completeReminder(reminderId) {
-  reminders = reminders.map(reminder => {
-    if (reminder.id === reminderId) {
-      return { ...reminder, completed: true };
-    }
-    return reminder;
-  });
-
-  renderReminders(reminders);
-}
-
-function deleteReminder(reminderId) {
-  reminders = reminders.filter(reminder => reminder.id !== reminderId);
-  renderReminders(reminders);
-}
-
-/* =========================
-   SCHEDULE
-========================= */
-
-let scheduleItems = [];
-
-function renderScheduleItems(items) {
-  const scheduleList = document.getElementById("scheduleList");
-  if (!scheduleList) return;
-
-  scheduleList.innerHTML = "";
-
-  items.forEach(item => {
-    const scheduleCard = document.createElement("div");
-    scheduleCard.className = "schedule-card";
-
-    scheduleCard.innerHTML = `
-      <div class="schedule-info">
-        <h3 class="${item.completed ? "completed-task" : ""}">${item.title}</h3>
-        <p>Time: ${item.time || "No time set"}</p>
-        <p>Status: ${item.completed ? "Completed" : "Pending"}</p>
-      </div>
-      <div class="schedule-actions">
-        ${
-          item.completed
-            ? `<span class="done-badge">Done</span>`
-            : `<button onclick="completeScheduleItem(${item.id})">Complete</button>`
-        }
-        <button class="delete-btn" onclick="deleteScheduleItem(${item.id})">Delete</button>
-      </div>
-    `;
-
-    scheduleList.appendChild(scheduleCard);
-  });
-}
-
-function addScheduleItem() {
-  const titleInput = document.getElementById("scheduleTitleInput");
-  const timeInput = document.getElementById("scheduleTimeInput");
-
-  if (!titleInput || !timeInput) return;
-
-  const title = titleInput.value.trim();
-  const time = timeInput.value;
-
-  if (title === "") return;
-
-  const newItem = {
-    id: Date.now(),
-    title: title,
-    time: time,
-    completed: false
-  };
-
-  scheduleItems.push(newItem);
-  renderScheduleItems(scheduleItems);
-
-  titleInput.value = "";
-  timeInput.value = "";
-  titleInput.focus();
-}
-
-function completeScheduleItem(scheduleId) {
-  scheduleItems = scheduleItems.map(item => {
-    if (item.id === scheduleId) {
-      return { ...item, completed: true };
-    }
-    return item;
-  });
-
-  renderScheduleItems(scheduleItems);
-}
-
-function deleteScheduleItem(scheduleId) {
-  scheduleItems = scheduleItems.filter(item => item.id !== scheduleId);
-  renderScheduleItems(scheduleItems);
-}
-
-/* =========================
-   SPENDING
-========================= */
-
-let expenses = [];
-
-function renderExpenses(expenseArray) {
-  const spendingList = document.getElementById("spendingList");
-  if (!spendingList) return;
-
-  spendingList.innerHTML = "";
-
-  expenseArray.forEach(expense => {
-    const expenseCard = document.createElement("div");
-    expenseCard.className = "spending-card";
-
-    expenseCard.innerHTML = `
-      <div class="spending-info">
-        <h3>${expense.title}</h3>
-        <p>Amount: $${Number(expense.amount).toFixed(2)}</p>
-      </div>
-      <div class="spending-actions">
-        <button class="delete-btn" onclick="deleteExpense(${expense.id})">Delete</button>
-      </div>
-    `;
-
-    spendingList.appendChild(expenseCard);
-  });
-
-  updateTotalSpending();
-  updateDashboardCards();
-}
-
-function addExpense() {
-  const titleInput = document.getElementById("expenseTitleInput");
-  if (!titleInput) return;
-
-  const text = titleInput.value.trim();
-  if (text === "") return;
-
-  const match = text.match(/(\d+(\.\d+)?)/);
-
-  if (!match) {
-    alert("Please include an amount. Example: Coffee 5");
-    return;
+async function addItem(type) {
+  let inputId, amountId;
+  switch (type) {
+    case "task": inputId = "taskInput"; break;
+    case "spending": inputId = "expenseTitleInput"; amountId = "expenseAmountInput"; break;
+    default: return;
   }
 
-  const amount = parseFloat(match[0]);
-  const title = text.replace(match[0], "").trim();
-
-  const newExpense = {
-    id: Date.now(),
-    title: title || "Expense",
-    amount: amount
-  };
-
-  expenses.push(newExpense);
-  renderExpenses(expenses);
-
-  titleInput.value = "";
-  titleInput.focus();
-}
-
-function deleteExpense(expenseId) {
-  expenses = expenses.filter(expense => expense.id !== expenseId);
-  renderExpenses(expenses);
-}
-
-function updateTotalSpending() {
-  const totalSpendingElement = document.getElementById("totalSpending");
-  if (!totalSpendingElement) return;
-
-  const total = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
-  totalSpendingElement.textContent = `$${total.toFixed(2)}`;
-}
-
-
-/* =========================
-   CHAT
-========================= */
-
-function sendMessage() {
-  const input = document.getElementById("user-input");
-  const messages = document.getElementById("messages");
-  if (!input || !messages) return;
-
+  const input = document.getElementById(inputId);
+  if (!input || !input.value.trim()) return;
   const text = input.value.trim();
-  if (!text) return;
 
-  messages.innerHTML += `<p><strong>You:</strong> ${text}</p>`;
+  let apiText = text;
+  let manualAmount = 0;
 
-  setTimeout(() => {
-    messages.innerHTML += `<p><strong>LifePilot:</strong> Got it! (Backend not connected yet)</p>`;
-    messages.scrollTop = messages.scrollHeight;
-  }, 400);
+  if (type === "spending") {
+    const amountInput = document.getElementById(amountId);
+    if (amountInput && amountInput.value) {
+      manualAmount = parseFloat(amountInput.value);
+      apiText += ` $${manualAmount}`;
+    }
+  }
+
+  const res = await callAPI(apiText);
+  if (!res || res.status === "error" || !res.data) {
+    console.error("[FRONTEND] Backend could not process request:", res?.message);
+    return; 
+  }
 
   input.value = "";
+  
+  if (type === "task") {
+    if (!window.tasks) window.tasks = [];
+    window.tasks.push({ 
+      id: res.data.id || Date.now(), 
+      title: res.data.title || text, 
+      time: res.data.due_date || "", 
+      completed: false 
+    });
+    renderList(window.tasks, "taskList", "task");
+  } else if (type === "spending") {
+    if (!window.spending) window.spending = [];
+    
+    const finalTitle = res.data.title || res.data.category || text;
+    const finalAmount = res.data.amount || manualAmount || 0;
+
+    window.spending.push({ 
+      id: res.data.id || Date.now(), 
+      title: finalTitle, 
+      amount: finalAmount 
+    });
+
+    const amountInput = document.getElementById(amountId);
+    if (amountInput) amountInput.value = "";
+    renderList(window.spending, "spendingList", "spending");
+  }
+}
+
+async function completeItem(type, id) {
+  if (type === "task") {
+    await fetch(`/api/tasks/complete/${id}`, { method: "POST" });
+    await syncData(); 
+  }
+}
+
+async function deleteItem(type, id) {
+  const url = type === "task" ? `/api/tasks/${id}` : `/api/finance/${id}`;
+  await fetch(url, { method: "DELETE" });
+  await syncData();
+}
+
+async function sendMessage() {
+  const input = document.getElementById("user-input");
+  const messages = document.getElementById("messages");
+  if (!input || !messages || !input.value.trim()) return;
+
+  const text = input.value.trim();
+  messages.innerHTML += `<p><strong>You:</strong> ${text}</p>`;
+  input.value = "";
+
+  const res = await callAPI(text);
+  const reply = res?.message || "I didn’t understand that.";
+  messages.innerHTML += `<p><strong>LifePilot:</strong> ${reply}</p>`;
   messages.scrollTop = messages.scrollHeight;
 }
 
-/* =========================
-   API PLACEHOLDERS
-========================= */
-
-async function apiGetTasks() {
-  console.log("GET /tasks (not connected yet)");
-}
-
-async function apiCreateTask(text) {
-  console.log("POST /tasks:", text);
-}
-
-async function apiCompleteTask(id) {
-  console.log("POST /tasks/complete:", id);
-}
-
-/* =========================
-   PAGE LOAD
-========================= */
-
-document.addEventListener("DOMContentLoaded", () => {
-  const chatInput = document.getElementById("user-input");
-  if (chatInput) {
-    chatInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") sendMessage();
-    });
-  }
-
-  const taskInput = document.getElementById("taskInput");
-  if (taskInput) {
-    taskInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") addTask();
-    });
-  }
-
-  const reminderInput = document.getElementById("reminderInput");
-  if (reminderInput) {
-    reminderInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") addReminder();
-    });
-  }
-
-  const scheduleTitleInput = document.getElementById("scheduleTitleInput");
-  if (scheduleTitleInput) {
-    scheduleTitleInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") addScheduleItem();
-    });
-  }
-
-  const expenseAmountInput = document.getElementById("expenseAmountInput");
-  if (expenseAmountInput) {
-    expenseAmountInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") addExpense();
-    });
-  }
-
-  const expenseTitleInput = document.getElementById("expenseTitleInput");
-  if (expenseTitleInput) {
-    expenseTitleInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") addExpense();
-    });
-  }
-
-  const firstBtn = document.querySelector(".nav-btn");
-  if (firstBtn) {
-    firstBtn.classList.add("active");
-  }
-
-  renderTasks(demoTasks);
-  renderReminders(reminders);
-  renderScheduleItems(scheduleItems);
-  renderExpenses(expenses);
-  updateDashboardCards();
-});
-let mediaRecorder;
-let audioChunks = [];
-let activeMicButton = null;
-
-async function startVoiceInput(targetInputId) {
+async function startVoiceInput(targetInputId, event) {
   const targetInput = document.getElementById(targetInputId);
   if (!targetInput) return;
 
+  const activeMicButton = event?.currentTarget;
+  if (activeMicButton) activeMicButton.classList.add("recording"); 
+
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const res = await fetch("/voice/listen", { method: "POST" });
+    const data = await res.json();
 
-    audioChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
+    if (data.status === "success" && data.text?.trim()) {
+      const spokenText = data.text.trim();
 
-    const micButtons = document.querySelectorAll(".mic-btn");
-    micButtons.forEach(btn => btn.classList.remove("recording"));
-
-    activeMicButton = event.target;
-    if (activeMicButton) {
-      activeMicButton.classList.add("recording");
+      if (targetInputId === "user-input") {
+        targetInput.value = spokenText;
+        targetInput.focus();
+        await sendMessage();
+        targetInput.value = ""; 
+      } else if (targetInputId === "taskInput") {
+        targetInput.value = spokenText;
+        await addItem("task");
+        targetInput.value = "";  
+      } else if (targetInputId === "expenseTitleInput") {
+        targetInput.value = spokenText;
+        await addItem("spending");
+        targetInput.value = "";   
+      }
     }
-
-    mediaRecorder.start();
-
-    mediaRecorder.ondataavailable = e => {
-      audioChunks.push(e.data);
-    };
-
-    mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-
-      const formData = new FormData();
-      formData.append("file", audioBlob, "voice.webm");
-
-      try {
-        const response = await fetch("/voice", {
-          method: "POST",
-          body: formData
-        });
-
-        const data = await response.json();
-
-        if (data.text) {
-          targetInput.value = data.text;
-          targetInput.focus();
-        } else {
-          alert("No text returned from backend.");
-        }
-      } catch (error) {
-        console.error("Voice upload error:", error);
-        alert("Voice input failed.");
-      }
-
-      if (activeMicButton) {
-        activeMicButton.classList.remove("recording");
-      }
-
-      stream.getTracks().forEach(track => track.stop());
-    };
-
-    setTimeout(() => {
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-      }
-    }, 5000);
-
-  } catch (error) {
-    console.error("Microphone access error:", error);
-    alert("Could not access microphone.");
+  } catch (err) {
+    console.error("Voice input error:", err);
+  } finally {
+    if (activeMicButton) activeMicButton.classList.remove("recording");
   }
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+  window.tasks = [];
+  window.spending = [];
+
+  syncData();
+
+  ["task", "spending"].forEach(type => {
+    const inputId = type === "spending" ? "expenseTitleInput" : "taskInput";
+    const el = document.getElementById(inputId);
+    const btn = document.getElementById(type + "AddBtn");
+    
+    if (el) el.addEventListener("keydown", e => { if (e.key === "Enter") addItem(type); });
+    if (btn) btn.addEventListener("click", () => addItem(type));
+  });
+
+  const chatInput = document.getElementById("user-input");
+  if (chatInput) chatInput.addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(); });
+
+  const firstBtn = document.querySelector(".nav-btn");
+  if (firstBtn) firstBtn.classList.add("active");
+});
