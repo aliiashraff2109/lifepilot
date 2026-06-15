@@ -1,50 +1,36 @@
 import json
-import re
 import os
-import google.genai as genai
-from datetime import datetime
-import dateparser
-from difflib import get_close_matches
+import re
 import string
+from datetime import datetime
+from difflib import get_close_matches
+
+import dateparser
+
+try:
+    import google.genai as genai
+except Exception:
+    genai = None
 
 
 class NLPParser:
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
+        self.client = None
 
-        if not self.api_key:
-            raise ValueError("[NLP ERROR] Gemini API key not found.")
+        if not self.api_key or genai is None:
+            print("[NLP WARNING] Gemini unavailable. Using local parser and fallback assistant.")
+            return
 
         try:
             self.client = genai.Client(api_key=self.api_key)
-            self._check_api_key()
         except Exception as e:
             print("[NLP ERROR] Failed to initialize Gemini client:", e)
             self.client = None
 
-    def _check_api_key(self):
-        """
-        Verify that the API key works by making a tiny request.
-        """
-        try:
-            print("[NLP] Checking Gemini API key...")
-
-            test = self.client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents="Return JSON: {\"intent\":\"unknown\",\"data\":{}}"
-            )
-
-            if not test or not getattr(test, "text", None):
-                raise Exception("Gemini returned empty response")
-
-            print("[NLP] Gemini API key verified successfully.")
-
-        except Exception as e:
-            print("[NLP ERROR] Gemini API key invalid or quota exceeded:", e)
-            self.client = None
-
     def clean_task_title(self, title: str) -> str:
         title = title.lower()
+
         for word in ["the ", "my ", "a "]:
             if title.startswith(word):
                 title = title[len(word):]
@@ -57,44 +43,70 @@ class NLPParser:
             return ""
 
         clean_input = self.clean_task_title(title)
-        clean_existing = {self.clean_task_title(t): t for t in existing_titles}
+        clean_existing = {
+            self.clean_task_title(t): t
+            for t in existing_titles
+        }
 
-        matches = get_close_matches(clean_input, list(clean_existing.keys()), cutoff=0.5)
+        matches = get_close_matches(
+            clean_input,
+            list(clean_existing.keys()),
+            cutoff=0.5
+        )
 
         if matches:
             return clean_existing[matches[0]]
 
-        return title.title()
+        return title.strip().title()
 
-    def parse(self, text: str, existing_task_titles: list = []) -> dict:
+    def parse_datetime(self, value: str, default_hour: int = 18) -> str:
+        parsed = dateparser.parse(value or "")
+
+        if not parsed:
+            parsed = datetime.now()
+
+        if parsed.hour == 0 and parsed.minute == 0:
+            parsed = parsed.replace(hour=default_hour, minute=0, second=0)
+
+        return parsed.strftime("%Y-%m-%d %H:%M:%S")
+
+    def parse(self, text: str, existing_task_titles: list = None) -> dict:
+        existing_task_titles = existing_task_titles or []
 
         if not text:
             return {"intent": "unknown", "data": {}}
 
         if not self.client:
-            print("[NLP WARNING] Gemini client unavailable, using fallback parser.")
             return self._fallback_parse(text)
 
         prompt = f"""
-You are LifePilot, an AI assistant for students.
-Convert the input into STRICT JSON.
+You are LifePilot, an assistant inside a productivity app.
+
+Convert the user input into STRICT JSON for app actions.
 
 Allowed intents ONLY:
 create_task
 list_tasks
 complete_task
+create_reminder
+list_reminders
+complete_reminder
+create_schedule
+list_schedule
 add_transaction
 get_transactions
 get_summary
 unknown
 
 Rules:
-- For finance actions use "add_transaction".
-- Transaction "type" must be either "expense" or "income".
-- Extract amount, category, date, and description if available.
-- For tasks, extract title, description, due_date, and priority.
-- If unsure, return intent "unknown".
-- Always return valid JSON.
+- Use create_reminder for "remind me", alerts, reminders, or notifications.
+- Use create_schedule for calendar events, meetings, classes, plans, appointments, or time blocks.
+- Use create_task for assignments, todos, homework, chores, or work items.
+- Use add_transaction for spending, buying, paid, income, earned, or received money.
+- Extract useful title, description, due_date, remind_at, event_time, priority, amount, category, type, and date.
+- Transaction type must be "expense" or "income".
+- If the user is chatting, asking for advice, or asking about their app data, return unknown.
+- Always return valid JSON only.
 
 JSON Format:
 {{
@@ -103,6 +115,8 @@ JSON Format:
     "title": "",
     "description": "",
     "due_date": "",
+    "remind_at": "",
+    "event_time": "",
     "priority": "",
     "amount": 0,
     "category": "",
@@ -112,90 +126,51 @@ JSON Format:
 }}
 
 Input: "{text}"
-
-Return ONLY valid JSON.
 """
 
         try:
-            print("[NLP] Sending request to Gemini:", text)
-
             response = self.client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt
             )
 
-            if not response:
-                raise Exception("Gemini returned None")
-
-            text_response = getattr(response, "text", None)
-
-            if not text_response:
-                raise Exception("Gemini returned empty text")
-
-            text_response = text_response.strip()
-
-            print("[NLP RAW RESPONSE]", text_response)
-
-            # Extract JSON block
+            text_response = getattr(response, "text", "").strip()
             match = re.search(r"\{.*\}", text_response, re.DOTALL)
+            parsed_json = json.loads(match.group(0) if match else text_response)
 
-            if match:
-                text_response = match.group(0)
+            intent = parsed_json.get("intent", "unknown")
 
-            print("[NLP JSON STRING]", text_response)
-
-            parsed_json = json.loads(text_response)
-
-            print("[NLP PARSED JSON]", parsed_json)
-
-            allowed_intents = [
+            allowed_intents = {
                 "create_task",
                 "list_tasks",
                 "complete_task",
+                "create_reminder",
+                "list_reminders",
+                "complete_reminder",
+                "create_schedule",
+                "list_schedule",
                 "add_transaction",
                 "get_transactions",
                 "get_summary",
-                "unknown"
-            ]
-
-            intent = parsed_json.get("intent")
+                "unknown",
+            }
 
             if intent not in allowed_intents:
-                print("[NLP WARNING] Invalid intent:", intent)
                 return {"intent": "unknown", "data": {}}
 
-            if "data" not in parsed_json:
-                parsed_json["data"] = {}
+            parsed_json.setdefault("data", {})
 
-            # Normalize task titles
             if parsed_json["data"].get("title"):
                 parsed_json["data"]["title"] = self.normalize_task_title(
                     parsed_json["data"]["title"],
                     existing_task_titles
                 )
 
-            # Finance date handling
-            if intent == "add_transaction":
-                date_input = parsed_json["data"].get("date")
-
-                if date_input:
-                    parsed_date = dateparser.parse(date_input)
-
-                    if parsed_date:
-                        if parsed_date.hour == 0 and parsed_date.minute == 0:
-                            parsed_date = parsed_date.replace(hour=18, minute=0, second=0)
-
-                        parsed_json["data"]["date"] = parsed_date.strftime("%Y-%m-%d %H:%M:%S")
-
-                    else:
-                        parsed_json["data"]["date"] = datetime.now().replace(
-                            hour=18, minute=0, second=0
-                        ).strftime("%Y-%m-%d %H:%M:%S")
-
-                else:
-                    parsed_json["data"]["date"] = datetime.now().replace(
-                        hour=18, minute=0, second=0
-                    ).strftime("%Y-%m-%d %H:%M:%S")
+            for field in ["due_date", "remind_at", "event_time", "date"]:
+                if parsed_json["data"].get(field):
+                    parsed_json["data"][field] = self.parse_datetime(
+                        parsed_json["data"][field]
+                    )
 
             return parsed_json
 
@@ -203,62 +178,234 @@ Return ONLY valid JSON.
             print("[NLP ERROR] Gemini parsing failed:", e)
             return self._fallback_parse(text)
 
+    def answer(self, message: str, context: dict) -> str:
+        if not self.client:
+            return self._fallback_answer(message, context)
+
+        prompt = f"""
+You are LifePilot, Ali's helpful AI assistant inside his personal productivity app.
+
+Use the live app data below to answer naturally and helpfully.
+You can discuss tasks, reminders, schedule, spending, priorities, planning, study/workload, and general questions.
+Keep answers concise and practical.
+
+Live app data:
+{json.dumps(context, ensure_ascii=False, default=str)}
+
+Ali says: "{message}"
+"""
+
+        try:
+            response = self.client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
+
+            return getattr(response, "text", "").strip() or self._fallback_answer(
+                message,
+                context
+            )
+
+        except Exception as e:
+            print("[NLP ERROR] Gemini assistant failed:", e)
+            return self._fallback_answer(message, context)
+
+    def _fallback_answer(self, message: str, context: dict) -> str:
+        tasks = context.get("tasks", [])
+        reminders = context.get("reminders", [])
+        schedule = context.get("schedule", [])
+        spending = context.get("spending", [])
+
+        pending_tasks = [
+            task for task in tasks
+            if not task.get("completed")
+        ]
+
+        pending_reminders = [
+            reminder for reminder in reminders
+            if not reminder.get("completed")
+        ]
+
+        total_spending = sum(
+            float(item.get("amount") or 0)
+            for item in spending
+            if item.get("type") != "income"
+        )
+
+        if "summary" in message.lower() or "overview" in message.lower():
+            return (
+                f"You have {len(pending_tasks)} pending tasks, "
+                f"{len(pending_reminders)} pending reminders, "
+                f"{len(schedule)} scheduled events, and "
+                f"${total_spending:.2f} in recorded spending."
+            )
+
+        if pending_tasks:
+            next_task = pending_tasks[0]
+
+            return (
+                f"I can help with that. Right now your next useful focus is "
+                f"'{next_task.get('title')}'. You also have "
+                f"{len(pending_reminders)} reminders and "
+                f"{len(schedule)} schedule items in LifePilot."
+            )
+
+        return (
+            "I can help you plan tasks, reminders, schedules, and spending. "
+            "Try asking for a summary, or say something like "
+            "'remind me to study tomorrow at 6'."
+        )
+
     def _fallback_parse(self, text: str) -> dict:
-        """
-        Simple rule-based backup parser.
-        """
+        lower = text.lower().strip()
 
-        lower = text.lower()
-
-        if "list" in lower and "task" in lower:
+        if any(phrase in lower for phrase in ["list tasks", "show tasks", "my tasks"]):
             return {"intent": "list_tasks", "data": {}}
 
-        if "complete" in lower and "task" in lower:
-            return {"intent": "complete_task", "data": {"title": text}}
+        if any(phrase in lower for phrase in ["list reminders", "show reminders", "my reminders"]):
+            return {"intent": "list_reminders", "data": {}}
 
-        amount = 0
-        category = ""
+        if any(phrase in lower for phrase in ["list schedule", "show schedule", "my schedule", "calendar"]):
+            return {"intent": "list_schedule", "data": {}}
 
-        amt_match = re.search(r"(\d+\.?\d*)", text)
-        if amt_match:
-            amount = float(amt_match.group(1))
+        if lower.startswith("complete "):
+            title = re.sub(
+                r"^complete\s+(task|reminder)?\s*",
+                "",
+                text,
+                flags=re.I
+            ).strip()
 
-        cat_match = re.search(r"on (\w+)", text)
-        if cat_match:
-            category = cat_match.group(1)
+            if "reminder" in lower:
+                return {
+                    "intent": "complete_reminder",
+                    "data": {
+                        "title": title
+                    }
+                }
 
-        date_parsed = datetime.now().replace(
-            hour=18, minute=0, second=0
-        ).strftime("%Y-%m-%d %H:%M:%S")
+            return {
+                "intent": "complete_task",
+                "data": {
+                    "title": title
+                }
+            }
 
-        if any(word in lower for word in ["spent", "bought", "paid"]):
+        amount_match = re.search(r"(\d+(?:\.\d+)?)", text)
+        amount = float(amount_match.group(1)) if amount_match else 0
+
+        if any(word in lower for word in ["spent", "bought", "paid", "expense"]):
+            category = self._extract_after_keyword(text, ["on", "for"]) or "General"
+
             return {
                 "intent": "add_transaction",
                 "data": {
                     "type": "expense",
                     "amount": amount,
                     "category": category,
-                    "date": date_parsed,
-                    "description": text
-                }
+                    "date": self.parse_datetime("now"),
+                    "description": text,
+                },
             }
 
         if any(word in lower for word in ["earned", "received", "income"]):
+            category = self._extract_after_keyword(text, ["from", "for"]) or "Income"
+
             return {
                 "intent": "add_transaction",
                 "data": {
                     "type": "income",
                     "amount": amount,
                     "category": category,
-                    "date": date_parsed,
-                    "description": text
-                }
+                    "date": self.parse_datetime("now"),
+                    "description": text,
+                },
             }
 
-        if "transaction" in lower or "history" in lower:
+        if any(word in lower for word in ["transaction", "history"]):
             return {"intent": "get_transactions", "data": {}}
 
-        if "summary" in lower:
+        if "summary" in lower and any(word in lower for word in ["finance", "spending", "money"]):
             return {"intent": "get_summary", "data": {}}
 
+        if lower.startswith("remind me") or lower.startswith("reminder") or " remind me " in f" {lower} ":
+            title = re.sub(
+                r"^(please\s+)?remind me to\s+",
+                "",
+                text,
+                flags=re.I
+            ).strip()
+
+            remind_at = self._extract_datetime_text(text)
+            title = self._remove_datetime_text(title, remind_at)
+
+            return {
+                "intent": "create_reminder",
+                "data": {
+                    "title": title,
+                    "remind_at": self.parse_datetime(remind_at) if remind_at else ""
+                },
+            }
+
+        if any(word in lower for word in ["schedule", "meeting", "appointment", "class", "event", "plan"]):
+            title = re.sub(
+                r"^(schedule|plan|add an event|add event)\s+",
+                "",
+                text,
+                flags=re.I
+            ).strip()
+
+            event_time = self._extract_datetime_text(text)
+            title = self._remove_datetime_text(title, event_time)
+
+            return {
+                "intent": "create_schedule",
+                "data": {
+                    "title": title or text,
+                    "event_time": self.parse_datetime(event_time) if event_time else ""
+                },
+            }
+
+        if any(word in lower for word in ["task", "todo", "homework", "assignment", "study", "finish", "do "]):
+            due_date = self._extract_datetime_text(text)
+
+            return {
+                "intent": "create_task",
+                "data": {
+                    "title": text.strip(),
+                    "due_date": self.parse_datetime(due_date) if due_date else "",
+                    "priority": "medium",
+                },
+            }
+
         return {"intent": "unknown", "data": {}}
+
+    def _extract_after_keyword(self, text: str, keywords: list) -> str:
+        for keyword in keywords:
+            match = re.search(rf"\b{keyword}\b\s+(.+)", text, re.I)
+
+            if match:
+                value = re.sub(
+                    r"\b\d+(?:\.\d+)?\b",
+                    "",
+                    match.group(1)
+                ).strip()
+
+                return value or match.group(1).strip()
+
+        return ""
+
+    def _extract_datetime_text(self, text: str) -> str:
+        match = re.search(
+            r"\b(today|tomorrow|tonight|next\s+\w+|on\s+\w+|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b.*",
+            text,
+            re.I,
+        )
+
+        return match.group(0) if match else ""
+
+    def _remove_datetime_text(self, title: str, datetime_text: str) -> str:
+        if not datetime_text:
+            return title.strip()
+
+        return title.replace(datetime_text, "").strip(" ,.-") or title.strip()

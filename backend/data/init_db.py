@@ -5,12 +5,9 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 data_folder = os.path.join(project_root, "data")
 db_path = os.path.join(data_folder, "life_pilot.db")
 
-print(f"Using DB path: {db_path}")  
-
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
-# Create tables
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +31,27 @@ CREATE TABLE IF NOT EXISTS transactions (
 )
 """)
 
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    text TEXT NOT NULL,
+    remind_at TEXT,
+    created_at TEXT
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS schedule (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    date TEXT,
+    time TEXT,
+    duration TEXT,
+    notes TEXT,
+    created_at TEXT
+)
+""")
+
 conn.commit()
 conn.close()
-
-print("Database initialized successfully in data/")
+print("Database initialized.")
